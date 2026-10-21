@@ -1,0 +1,54 @@
+{
+  "snapshot": "prepared OSCE bench referenced by MedGym README_TEST_OSCE.md",
+  "case_counts": {
+    "with_img/ed_hosp": 401,
+    "with_img/hosp_only": 17,
+    "without_img/hosp_only": 3470,
+    "without_img/ed_hosp": 1517
+  },
+  "total_cases": 5405,
+  "ehr_files": 5405,
+  "osce_files": 5405,
+  "jpg_files": 883,
+  "manifest_files": 1,
+  "benchmark_bytes": 1844690746,
+  "retrieval_files": 5,
+  "retrieval_bytes": 2879348611,
+  "total_import_files": 11699,
+  "total_import_bytes": 4724039357,
+  "data_in_public_git": false,
+  "subset_validation": {
+    "with_img/ed_hosp": {
+      "cases": 401,
+      "images": 855,
+      "image_references": 841,
+      "missing_labels": 0
+    },
+    "with_img/hosp_only": {
+      "cases": 17,
+      "images": 28,
+      "image_references": 28,
+      "missing_labels": 0
+    },
+    "without_img/hosp_only": {
+      "cases": 3470,
+      "images": 0,
+      "image_references": 0,
+      "missing_labels": 0
+    },
+    "without_img/ed_hosp": {
+      "cases": 1517,
+      "images": 0,
+      "image_references": 0,
+      "missing_labels": 0
+    }
+  },
+  "unique_referenced_images": 869,
+  "images_not_referenced_by_ehr": 14,
+  "retrieval_index": {
+    "vectors": 337219,
+    "dimensions": 768
+  },
+  "import_sha256_verification": "passed for all 11699 files",
+  "structural_validation": "passed"
+}

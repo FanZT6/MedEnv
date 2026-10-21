@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "medenv-bench"
+version = "0.1.0"
+description = "OSCE medical agent benchmark with patient simulation and optional CXR tools"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+dependencies = [
+  "torch>=2.4,<3", "transformers>=4.57,<5", "openai>=1.60,<3",
+  "httpx>=0.27,<1", "numpy>=1.26,<3", "pillow>=10,<13", "click>=8,<9",
+]
+
+[project.optional-dependencies]
+retrieval = ["datasets>=4.5,<5", "pyarrow>=21,<23", "faiss-cpu>=1.8,<2", "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "tqdm>=4.66,<5"]
+grounding = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "torchvision>=0.19,<1"]
+dev = ["build>=1.2,<2", "fastapi>=0.115,<1"]
+
+[project.scripts]
+medenv-bench = "medenv.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["medenv*", "rllm*"]
+exclude = ["data*", "tests*", "services*", "scripts*"]
+
+[tool.setuptools]
+include-package-data = false

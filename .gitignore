@@ -1,0 +1,30 @@
+# Credentialed clinical data and third-party retrieval corpora
+/data/*
+!/data/README.md
+!/data/dataset_summary.json
+!/data/synthetic/
+/outputs/
+/models/
+/.env
+/.env.*
+!/.env.example
+/.venv*/
+__pycache__/
+*.py[cod]
+*.egg-info/
+/.pytest_cache/
+/.ruff_cache/
+/.cache/
+/build/
+/dist/
+*.log
+*.partial
+# Defense in depth for accidentally relocated clinical records
+ehr_[0-9]*.json
+osce_[0-9]*.json
+trajectory_*.json
+manifest.jsonl
+*.index
+*.safetensors
+*.pt
+*.pth

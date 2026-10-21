@@ -1,0 +1,13 @@
+# Versions observed in the source evaluation environment (Python 3.11).
+# Constraints, not a complete lockfile. Install torch for your CPU/CUDA platform first.
+torch==2.8.0
+transformers==4.57.6
+openai==2.15.0
+httpx==0.28.1
+numpy==1.26.4
+pillow==12.1.0
+
+# Optional retrieval service (validated CPU compatibility)
+datasets==4.5.0
+faiss-cpu==1.13.2
+pyarrow==22.0.0

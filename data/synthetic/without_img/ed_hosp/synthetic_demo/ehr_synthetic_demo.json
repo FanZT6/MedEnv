@@ -1,0 +1,21 @@
+{
+  "ehr": {
+    "Patient_info": {
+      "age": 40,
+      "gender": "synthetic"
+    },
+    "History": {
+      "Chief_Complaint": "A fictional symptom for software testing.",
+      "HPI": "Entirely synthetic test fixture; no real patient.",
+      "Past_Medical_History": "Synthetic history.",
+      "Social_History": "Synthetic history."
+    },
+    "Physical_Examination_Findings": "Synthetic examination findings.",
+    "Test_Results-Labs": [],
+    "Test_Results-Microbiology": [],
+    "Test_Results-Imaging": [],
+    "Final_Result": "Synthetic condition A",
+    "CXR": []
+  },
+  "knowledge": []
+}
