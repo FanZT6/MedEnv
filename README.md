@@ -36,8 +36,6 @@
   <img src="https://github.com/user-attachments/assets/a53a72ce-aa5f-4a99-ab8c-03c7614bd01b" width="680" alt="MedEnv environment connecting a doctor agent to patient and examiner simulators, guideline retrieval and vision tools.">
 </p>
 
-*Environment overview. The original figure labels the environment “MedDiagWorld”; this repository uses MedEnv.*
-
 | Component | Role |
 |---|---|
 | Patient simulator | Answers questions about history, symptoms and personal observations. |
@@ -69,8 +67,6 @@ The paper trains Qwen3-VL-8B-Instruct with approximately 3K expert trajectories 
 | **Diagnosis-R1** | **41.95** | **41.15** |
 
 **Training ablation:** base → SFT → outcome-only RL → Diagnosis-R1 improves no-image accuracy from **10.28 → 27.54 → 31.51 → 41.95%**. Scaling gains broadly saturate near 50K trajectories; image input does not consistently improve accuracy across models.
-
-> **Code scope:** this release provides MIMIC processing, benchmark inference and evaluation. The training recipe and results above describe the paper; this checkout does not provide an end-to-end reproduction of Diagnosis-R1 training.
 
 ## Getting Started
 
