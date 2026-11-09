@@ -1,8 +1,23 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 from dataclasses import dataclass
+from enum import Enum
 
 from rllm.tools.tool_base import ToolCall
 
+
+class TerminationReason(Enum):
+    MAX_PROMPT_LENGTH_EXCEEDED = "max_prompt_length_exceeded"
+    MAX_RESPONSE_LENGTH_EXCEEDED = "max_response_length_exceeded"
+    ENV_DONE = "env_done"
+    MAX_TURNS_EXCEEDED = "max_turns_exceeded"
+    TIMEOUT = "timeout"
+    UNKNOWN = "unknown"
+    ERROR = "error"
+
+class TerminationEvent(Exception):
+    def __init__(self, reason: TerminationReason = TerminationReason.UNKNOWN):
+        super().__init__(f"Terminated: {reason}")
+        self.reason = reason
 
 @dataclass
 class ModelOutput:

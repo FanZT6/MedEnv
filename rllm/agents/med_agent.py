@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 import copy
 import json
 import logging
@@ -8,10 +8,8 @@ from typing import Any, Optional
 from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import TOOL_SYSTEM_PROMPT
 from rllm.parser import ToolParser, get_tool_parser
-from rllm.tools.mcp_tool import MCPTool
 from rllm.tools.multi_tool import MultiTool
 from rllm.tools.tool_base import Tool
-from rllm.agents.tool_agent import ToolAgent
 
 logger = logging.getLogger(__name__)
 
@@ -248,65 +246,3 @@ class MedicalAgent(BaseAgent):
     @property
     def trajectory(self) -> Trajectory:
         return self._trajectory
-
-
-class MCPToolAgent(ToolAgent):
-    """
-    A ToolAgent variant that uses MCPTool registry / map.
-
-    Fixes the original code bug:
-    - original default `tool_map=list[MCPTool]` is a typing annotation, not a runtime dict.
-    """
-
-    def __init__(
-        self,
-        system_prompt: str = TOOL_SYSTEM_PROMPT,
-        parser_name: str = "qwen",
-        tool_map: Any = None,
-        auto_finish_on_no_tool: bool = False,
-        append_assistant_message: bool = True,
-    ):
-        # Normalize tool_map into a dict-like structure of tools
-        # Accept:
-        # - dict[str, MCPTool] or dict[str, type[MCPTool]]
-        # - list[MCPTool] or list[type[MCPTool]]
-        if tool_map is None:
-            # 如果 MCPTool 内部有注册表，你可以在这里改成 MCPTool.registry 之类
-            # 这里先默认空
-            normalized_tools_json = []
-        else:
-            if isinstance(tool_map, dict):
-                values = list(tool_map.values())
-            elif isinstance(tool_map, list):
-                values = tool_map
-            else:
-                raise TypeError("tool_map must be a dict or a list for MCPToolAgent")
-
-            normalized_tools_json = []
-            for t in values:
-                # t can be instance or class; both should expose `.json` in your implementation
-                try:
-                    normalized_tools_json.append(t.json)  # type: ignore[attr-defined]
-                except Exception:
-                    # fallback: if it's a class, try instantiate without args (if possible)
-                    try:
-                        inst = t()  # type: ignore[call-arg]
-                        normalized_tools_json.append(inst.json)
-                    except Exception as e:
-                        raise TypeError(f"Invalid MCPTool entry: {t}. Error: {e}") from e
-
-        parser_class: type[ToolParser] = get_tool_parser(parser_name=parser_name)
-        tool_parser = parser_class()
-        tools_prompt = tool_parser.get_tool_prompt(json.dumps(normalized_tools_json, indent=2, ensure_ascii=False))
-
-
-        self.system_prompt = system_prompt
-        self.auto_finish_on_no_tool = auto_finish_on_no_tool
-        self.append_assistant_message = append_assistant_message
-        self.tool_parser = tool_parser
-        self.tools_prompt = tools_prompt
-
-        self._trajectory = Trajectory()
-        self.messages: list[dict[str, Any]] = []
-        self.current_observation = None
-        self.reset()

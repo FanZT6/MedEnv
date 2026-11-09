@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 from abc import ABC, abstractmethod
 from typing import Any
 

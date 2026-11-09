@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 from rllm.parser.chat_template_parser import ChatTemplateParser, DeepseekQwenChatTemplateParser, LlamaChatTemplateParser, QwenChatTemplateParser
 from rllm.parser.tool_parser import QwenToolParser, R1ToolParser, ToolParser
 

@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 #!/usr/bin/env python3
 """
 Grounding DINO 检测 API 服务：加载 IDEA-Research/grounding-dino-base，

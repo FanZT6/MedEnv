@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 from .registry import ToolRegistry
 from .med_tool import DialogTool, DiagnosisTool, RetrieveTool, CXRTool, ExamResultTool, CXRGroundingTool, FinishTool
 DEFAULT_TOOLS = {

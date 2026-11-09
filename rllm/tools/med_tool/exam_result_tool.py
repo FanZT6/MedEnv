@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 # rllm/tools/med_tool/exam_result_tool.py
 """
 request_exam 工具：医生请求某项检查结果。
@@ -295,7 +295,7 @@ class ExamResultTool(Tool):
             )
 
         # ---------- 3) 若不包含则从 knowledge base 给出大致回答 ----------
-        if knowledge_obj is not None and llm:
+        if _has_content(knowledge_obj) and llm:
             kb_text = to_pretty_text(knowledge_obj, max_chars=20000)
             sys_prompt = KB_APPROXIMATE_EXAM_PROMPT.format(exam_type=exam_type)
             result_text = _llm_one_line(llm, sys_prompt, kb_text, max_tokens=512)

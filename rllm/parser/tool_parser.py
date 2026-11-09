@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 import json
 from abc import ABC, abstractmethod
 from typing import Any
@@ -239,7 +239,7 @@ class QwenToolParser(ToolParser):
             try:
                 call_data = json.loads(json_content)
                 # Convert to common format matching parse_tool_calls output
-                tool_calls.append({"name": call_data["name"], "arguments": call_data["arguments"]})
+                tool_calls.append({"name": call_data["name"], "arguments": call_data.get("arguments", {})})
             except json.JSONDecodeError:
                 print(f"Error parsing tool call: {json_content}")
                 text = text[end + len(self.tool_call_end) :]

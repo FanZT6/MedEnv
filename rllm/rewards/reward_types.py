@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 """
 This module defines data structures and base classes for reward calculations
 to evaluate model responses for various problem types, including math and coding.

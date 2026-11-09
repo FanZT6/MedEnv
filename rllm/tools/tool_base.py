@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -166,28 +166,3 @@ class Tool:
             return self.forward(*args, **kwargs)
         else:
             raise NotImplementedError(f"Tool {self.__class__.__name__} must implement either forward() or async_forward().")
-
-
-if __name__ == "__main__":
-
-    def add(a: int, b: int) -> int:
-        r"""Adds two numbers.
-
-        Args:
-            a (int): The first number to be added.
-            b (int): The second number to be added.
-
-        Returns:
-            integer: The sum of the two numbers.
-        """
-        return a + b
-
-    tool = Tool(function=add)
-    print(tool.json)
-    print(tool(1, 2))
-
-    from camel.toolkits import SearchToolkit
-
-    google_fn = SearchToolkit().search_google
-    google_tool = Tool(function=google_fn)
-    print(google_tool(query="What is the capital of France?", num_result_pages=5))

@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 import asyncio
 import logging
 import time
@@ -116,33 +116,18 @@ class AgentExecutionEngine:
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", {})  # for openai api requests
 
-        assert self.engine_name in ["openai", "verl", "tinker"], "Currently only openai, verl and tinker are supported as rollout engine"
-        if self.engine_name == "openai":
-            from rllm.engine.rollout.openai_engine import OpenAIEngine
+        if self.engine_name != "openai":
+            raise ValueError("The benchmark uses the OpenAI-compatible inference backend")
+        from rllm.engine.rollout.openai_engine import OpenAIEngine
 
-            self.rollout_engine = OpenAIEngine(
-                **rollout_engine_args,
-                api_retries=api_retries,
-                tokenizer=self.tokenizer,
-                max_prompt_length=self.max_prompt_length,
-                max_response_length=self.max_response_length,
-                disable_thinking=self.disable_thinking,
-            )
-        elif self.engine_name == "verl":
-            from rllm.engine.rollout.verl_engine import VerlEngine
-
-            self.rollout_engine = VerlEngine(
-                config=self.config,
-                rollout_manager=rollout_engine,
-                tokenizer=self.tokenizer,
-                disable_thinking=self.disable_thinking,
-            )
-        elif self.engine_name == "tinker":
-            from rllm.engine.rollout.tinker_engine import TinkerEngine
-
-            self.rollout_engine = TinkerEngine(
-                **rollout_engine_args,
-            )
+        self.rollout_engine = OpenAIEngine(
+            **rollout_engine_args,
+            api_retries=api_retries,
+            tokenizer=self.tokenizer,
+            max_prompt_length=self.max_prompt_length,
+            max_response_length=self.max_response_length,
+            disable_thinking=self.disable_thinking,
+        )
 
         # Create a thread pool executor for environment interactions (i.e. step, reset, close)
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
@@ -191,19 +176,8 @@ class AgentExecutionEngine:
         sampling_params = self.sampling_params.copy()
         sampling_params.update(kwargs)
 
-        if self.engine_name == "openai":
-            output = await self.rollout_engine.get_model_response(prompt, application_id=application_id, enforce_max_prompt_length=False, **sampling_params)
-            return output
-        elif self.engine_name == "verl":
-            meta_data = sampling_params.pop("meta_info", {})
-            validate = meta_data.get("validate", False)
-            output = await self.rollout_engine.get_model_response(prompt, application_id=application_id, validate=validate, enforce_max_prompt_length=False, **sampling_params)
-            return output
-        elif self.engine_name == "tinker":
-            output = await self.rollout_engine.get_model_response(prompt, application_id=application_id, enforce_max_prompt_length=False, **sampling_params)
-            return output
-        else:
-            raise NotImplementedError(f"Engine type '{self.engine_name}' not supported")
+        output = await self.rollout_engine.get_model_response(prompt, application_id=application_id, enforce_max_prompt_length=False, **sampling_params)
+        return output
 
     def update_envs_and_agents(self, envs, agents):
         """
@@ -266,6 +240,18 @@ class AgentExecutionEngine:
         for step_idx in range(self.max_steps):
             # Get action from agent
             prompt_messages = agent.chat_completions.copy()
+            if step_idx == self.max_steps - 1:
+                # The environment closes on this turn, so collect the diagnosis
+                # before it scores and closes instead of asking another question.
+                prompt_messages.append({
+                    "role": "user",
+                    "content": (
+                        "This is the final interaction turn. Based on the evidence already collected, "
+                        "submit your final diagnosis now using the diagnosis tool. "
+                        "Do not ask more questions or request tests. Set its final_response argument "
+                        "to this exact format: The final diagnosis is: \\boxed{<final diagnosis>}."
+                    ),
+                })
             # Max remaining tokens left for the response
             # For enforced max prompt at each step, no need to deduct here
             if not self.enforce_max_prompt_length:
@@ -334,6 +320,8 @@ class AgentExecutionEngine:
             total_time += delta_time
             info["max_steps"] = self.max_steps
             info["cur_tokens"] = response_token_len
+            if step_idx == self.max_steps - 1:
+                info["final_turn_instruction"] = prompt_messages[-1]["content"]
 
             # Update agent internal state.
             agent.update_from_env(
@@ -658,8 +646,6 @@ class AgentExecutionEngine:
 
         self.executor = ThreadPoolExecutor(max_workers=max_concurrency)
 
-        if self.engine_name == "verl":
-            await self.rollout_engine.wake_up()  # type: ignore
 
         semaphore = asyncio.Semaphore(self.n_parallel_agents)
 
@@ -693,8 +679,6 @@ class AgentExecutionEngine:
             except Exception as e:
                 raise e
 
-        if self.engine_name == "verl":
-            await self.rollout_engine.sleep()  # type: ignore
 
         self.executor.shutdown(wait=False, cancel_futures=True)
 

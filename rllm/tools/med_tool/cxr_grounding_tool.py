@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 # rllm/tools/med_tool/cxr_grounding_tool.py
 """
 cxr_grounding 工具：在对 CXR 图像理解不到位时，医生可指定需要标注的部位文本，

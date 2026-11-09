@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 # ./rllm/rllm/tools/med_tool/cxr_tool.py
 from __future__ import annotations
 
@@ -48,6 +48,8 @@ class CXRTool(Tool):
         max_image_bytes: int = 25 * 1024 * 1024,
     ):
         super().__init__(name=name, description=description)
+        if os.getenv("MEDENV_CXR_MODE", "reports") == "reports":
+            self.description = "Read the chest X-ray report text for a study. No images or image paths are returned."
         self.case_dir = case_dir or os.getenv("RLLM_CASE_DIR", "")
         self.max_images = int(max_images)
         self.max_image_bytes = int(max_image_bytes)
@@ -55,6 +57,13 @@ class CXRTool(Tool):
 
     @property
     def json(self) -> dict[str, Any]:
+        if os.getenv("MEDENV_CXR_MODE", "reports") == "reports":
+            return {"type": "function", "function": {
+                "name": self.name, "description": self.description,
+                "parameters": {"type": "object", "properties": {
+                    "study_index": {"type": "integer", "default": -1,
+                                    "description": "Report to read; -1 selects the last study."}},
+                    "required": []}}}
         return {
             "type": "function",
             "function": {
@@ -190,6 +199,17 @@ class CXRTool(Tool):
         study = cxr_list[idx] if isinstance(cxr_list[idx], dict) else {}
         dicoms = study.get("dicoms", [])
         report_text = study.get("report_text", [])
+        if os.getenv("MEDENV_CXR_MODE", "reports") == "reports":
+            if isinstance(report_text, list):
+                report_text = "\n".join(x for x in report_text if isinstance(x, str))
+            if not isinstance(report_text, str) or not report_text.strip():
+                return ToolOutput(name=self.name, error="missing_cxr_report",
+                                  metadata={"case_id": case_id, "study_index": idx})
+            return ToolOutput(name=self.name, output={
+                "summary": "CXR report text; no images requested or returned.",
+                "study_index": idx, "num_studies": len(cxr_list),
+                "report_text": report_text,
+            }, metadata={"mode": "ehr_cxr_reports"})
 
         if not isinstance(dicoms, list) or not dicoms:
             return ToolOutput(

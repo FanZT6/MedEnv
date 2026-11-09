@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -234,12 +234,3 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     build_index(args)
-
-
-"""
-python ./examples/search/guidelines/build_guidelines_faiss_index.py \
-  --input_jsonl ./examples/search/guidelines/guidelines.jsonl \
-  --output_dir  ./examples/search/guidelines/guidelines_index \
-  --max_length 512 \
-  --chunk_tokens 380
-"""

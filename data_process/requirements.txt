@@ -1,0 +1,3 @@
+# Python >= 3.10; the surrounding MedEnv project may require a newer Python.
+duckdb>=1.4.3,<2
+tqdm>=4.66,<5

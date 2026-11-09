@@ -1,98 +1,103 @@
-# MedEnv：OSCE 医学智能体评测仓库
+# MedEnv: Scaling Multimodal Virtual Medical Environments for Long-Horizon Diagnosis
 
-本仓库按 MedGym 的 `README_TEST_OSCE.md` 运行流程整理，包含 bench 数据加载、医生/患者交互、检查请求、诊断评分、检索服务及 CXR 工具。运行时已独立封装，不再依赖原来的 rllm 路径。
+**MICCAI 2026 接收论文。**
 
-## 本地数据与公开仓库
+MedEnv 是面向多轮诊断的多模态虚拟医疗环境。医生智能体通过问诊、申请检查、检索医学知识、查看胸片和视觉定位收集证据，最终提交诊断。本仓库提供数据处理框架、benchmark 推理与评测代码。
 
-本地 `data/bench/` 保存全部 **5,405 个病例、883 张图像**，包含四个子集：
+[English](README.md) · [完整推理流程](docs/RUNNING.md) · [配置与代码修改示例](docs/CONFIGURATION.md) · [数据格式](data/README.md)
 
-| 子集 | 病例数 | 原运行说明是否覆盖 |
-|---|---:|---|
-| `with_img/ed_hosp` | 401 | 默认有图模式 |
-| `with_img/hosp_only` | 17 | 新增显式选择支持 |
-| `without_img/hosp_only` | 3,470 | `--no_cxr` |
-| `without_img/ed_hosp` | 1,517 | 新增显式选择支持 |
+## 公开范围与 MIMIC 数据限制
 
-`data/retrieval/` 保存现有检索语料、E5/FAISS 索引、文档映射和用于重建索引的原始语料。复制时逐文件核对 SHA-256，本地校验清单位于 `data/private/`。
+我们公开的是**对 MIMIC 数据进行处理的代码框架和处理过程**，包括数据库导入、诊断时间窗口提取、OSCE 病例构建、EHR 格式转换和 ICD 分层抽样。具体步骤、输入要求和运行命令见 [`data_process/README.md`](data_process/README.md)。其中 CXR 预处理仅使用报告文本，不打包或复制图像，也不承诺重建与历史 5,405 例 benchmark 完全一致的数据集。
 
-真实病例、影像、检索语料、模型与实验输出默认不进入 Git。MIMIC 衍生记录仍受数据访问条款约束，不能因为代码开源就直接上传公开 GitHub。公开版本包含四个完全合成病例和数据接入脚本。详见 [数据说明](docs/DATA.md)。
+**MIMIC 是受限访问的数据集，本次代码公开不包含其原始数据或患者级衍生数据。** 原始表、临床记录、影像报告及图像、患者/住院/检查标识符、处理后的 OSCE/EHR 病例、病例抽样清单和逐例模型交互轨迹均应保存在私有环境，并遵守适用的 PhysioNet 访问条件及数据使用协议。去标识化、转成 JSON 或去掉本机路径，不代表这些记录可以公开。使用者须自行取得输入所需的 [MIMIC-IV](https://physionet.org/content/mimiciv/)、[MIMIC-IV-Note](https://physionet.org/content/mimic-iv-note/)、[MIMIC-IV-ED](https://physionet.org/content/mimic-iv-ed/) 和 [MIMIC-CXR](https://physionet.org/content/mimic-cxr/) 访问权限。Apache-2.0 仅适用于代码，不授予数据再分发权利。
 
-## 安装与离线检查
+真实输入、数据库和处理产物应存放在仓库之外。本地 `data/bench/`、`data/retrieval/` 和 `outputs/` 已被 Git 忽略，但 **`.gitignore` 不能阻止手工压缩、目录上传或文件复制带出这些内容**；发布时只应包含经过检查的源码。可公开的 `data/synthetic/` 是完全虚构的软件测试病例，其图片是生成的测试图案。
 
-推荐 Python 3.11；PyTorch 按实际 CPU/CUDA 环境安装。
+关于删除：不再需要运行记录时可以删除 `outputs/`，评测会重新创建输出目录。建议保留 `data/README.md` 和 `data/synthetic/`，它们用于文档、快速检查和离线测试；单独迁移或移除私有的 `data/bench/` 与本地 `data/retrieval/`。删除后，真实评测需将 `MEDENV_BENCH_ROOT` 指向仓库外的授权数据，检索服务需配置外部 `RETRIEVAL_INDEX` / `RETRIEVAL_CORPUS`。检查范围及结果见[本地数据公开检查记录](docs/DATA_PRIVACY_AUDIT_zh.md)。
+
+## 推理流程
+
+1. 加载病例，向医生提供人口学信息和主诉。
+2. 医生选择问诊或工具调用，环境返回相应证据。患者与检查模拟器优先使用病例 EHR，记录不足时查询关联的疾病知识。
+3. 重复交互，直到医生提交诊断或达到轮数限制。
+4. Judge 根据参考诊断评分，保存指标和完整交互轨迹。
+
+可用工具包括 `ask_patient`、`request_exam`、`retrieve`、`diagnosis`；有图子集还提供 `cxr` 和 `cxr_grounding`。
+
+## 快速开始
+
+推荐 Python 3.11，PyTorch 按硬件环境安装。
 
 ```bash
-cd /path/to/MedEnv
+git clone https://github.com/FanZT6/MedEnv.git
+cd MedEnv
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e .
 cp .env.example .env
 
-python -m medenv --case_dir data/synthetic --dry_run
-python -m unittest discover -s tests -v
-python scripts/validate_data.py --bench-root data/bench
+# 用合成病例检查全部四个子集，无需启动模型服务。
+bash scripts/run_all.sh --case_dir data/synthetic --dry_run
 ```
 
-新机器上有已授权的预处理 bench 时，可完整导入：
+在 `.env` 中设置数据路径、模型路径、tokenizer、API 地址和 GPU：
 
 ```bash
-python scripts/import_data.py --bench-source /path/to/osce_data/bench
-# 可选：同时导入原项目 guidelines 目录中的检索资产
-python scripts/import_data.py --retrieval-source /path/to/guidelines
+MEDENV_BENCH_ROOT=/path/to/bench
+DOCTOR_MODEL_PATH=/path/to/doctor-model
+TOKENIZER_PATH=/path/to/doctor-model
+PATIENT_MODEL_PATH=/path/to/patient-model
+JUDGE_MODEL_PATH=/path/to/judge-model
+DOCTOR_GPUS=0
+PATIENT_GPUS=1
+JUDGE_GPUS=2
 ```
 
-## 按原说明启动三个模型服务
-
-vLLM 建议单独建环境安装，避免与评测环境的 PyTorch 依赖冲突；原环境记录的版本为 `vllm==0.11.0`。修改 `.env` 中的模型路径、tokenizer 路径、GPU 分配后，在三个终端分别执行：
+按[运行指南](docs/RUNNING.md)安装并分别启动 Doctor、Patient、Judge、检索和 Grounding 服务后，即可推理：
 
 ```bash
-bash scripts/start_vllm.sh doctor
-bash scripts/start_vllm.sh patient
-bash scripts/start_vllm.sh judge
-```
+# 有 CXR 子集：文本模型通过报告获取胸片信息。
+bash scripts/run_bench.sh --cxr_mode reports --max_cases 10 --n_parallel_agents 1
 
-默认端口为 `30000/30001/30002`，默认 GPU 分别为 `0/1/2`。每个脚本只启动一个前台服务；不会清理机器上已有服务。GPU 显存是否足够取决于模型、上下文长度与硬件，可配置多卡 TP。脚本会检查配置中的三组 GPU 是否重叠。
+# 无 CXR 子集。
+bash scripts/run_bench.sh --no_cxr --max_cases 10 --n_parallel_agents 1
 
-原工具集还需要检索服务；有图模式下的 `cxr_grounding` 需要 Grounding DINO 服务。其安装、启动与健康检查见 [完整运行指南](docs/RUNNING.md)。
+# 指定子集，运行全部病例，每例重复 3 次。
+bash scripts/run_bench.sh --subdir with_img/hosp_only --max_cases 0 --repeat_k 3
 
-## 跑 bench
-
-```bash
-# 有 CXR 的人群，Qwen3-8B 文本报告模式；默认前 10 例
-bash scripts/run_bench.sh --cxr_mode reports
-
-# 无 CXR；默认 without_img/hosp_only
-bash scripts/run_bench.sh --no_cxr
-
-# 显式指定其他子集，0 表示运行该子集全部病例
-bash scripts/run_bench.sh --subdir with_img/hosp_only --max_cases 0
-
-# 全部 4 个子集、全部病例；每个子集独立保存结果
+# 运行全部四个子集。
 bash scripts/run_all.sh --n_parallel_agents 1
 ```
 
-使用 `--cxr_mode vision` 时，Doctor 必须换成支持图像输入的模型及对应 tokenizer。原说明的 Qwen3-8B 是文本模型：本仓库将其行为明确标记为报告模式。视觉模式通过 Chat Completions 传递图像，同时保留原工具提供的报告文本，不能将它称为纯图像实验。
+使用图像输入时，将 Doctor 换成支持视觉的模型及其 tokenizer，并设置 `--cxr_mode vision`。两种 CXR 模式均会提供报告信息，视觉模式额外传入图像。
 
-`--disable_retrieval` 和 `--disable_grounding` 可用于消融实验；会改变工具配置。直接运行 Python 入口时需先导出 `.env`；shell 脚本会自动加载。
+默认结果路径为 `outputs/<run>/<subset>/`，包含运行配置 `config.json`、评测指标 `metrics.json` 和 `trajectories/` 下的逐例轨迹。
 
-每次运行产生：
+## 修改设置
 
-- `config.json`：参数、工具集和样本数，API key 已脱敏。
-- `metrics.json`：实际环境判分、准确率、经验 pass@k、逐病例结果。
-- `trajectories/`：逐病例交互轨迹。可用 `python scripts/trajectory_to_html.py <trajectory.json> --output outputs/trajectory.html` 转为 HTML。
+| 要修改什么 | 修改位置 |
+|---|---|
+| 模型、API 地址、GPU、数据路径 | [`.env.example`](.env.example)：复制为 `.env` 后编辑 |
+| 样本数、轮数、重复次数、采样温度、并发数 | 命令行参数；默认值在 [`medenv/cli.py`](medenv/cli.py) 的 `build_parser()` |
+| 医生提示词 | [`rllm/agents/system_prompts.py`](rllm/agents/system_prompts.py) |
+| 患者回答与检查结果的生成规则 | [`dialog_tool.py`](rllm/tools/med_tool/dialog_tool.py)、[`exam_result_tool.py`](rllm/tools/med_tool/exam_result_tool.py) |
+| 启用的工具 | [`medenv/cli.py`](medenv/cli.py) 的 `run_configuration()` |
+| Judge 提示词、评分逻辑 | [`med_diagnosis_reward.py`](rllm/rewards/med_diagnosis_reward.py) |
+| 数据字段与医生的初始主诉 | [`medenv/data.py`](medenv/data.py) |
 
-## 发布 GitHub
+例如，调整推理预算和采样参数：
 
 ```bash
-git add .
-python scripts/check_release.py --archive dist/MedEnv-public.zip
-git diff --cached --stat
-# 检查后自行提交并连接目标仓库
-git commit -m "Initial MedEnv benchmark release"
-git remote add origin <your-github-repository-url>
-git push -u origin main
+bash scripts/run_bench.sh \
+  --max_cases 100 --repeat_k 3 --max_steps 20 \
+  --temperature 0.2 --top_p 0.9 --n_parallel_agents 4
 ```
 
-`dist/MedEnv-public.zip` 为可分享的源码包，排除了真实数据与本地运行产物。不要将整个本地目录直接压缩上传；请使用发布脚本。代码沿用原目录的 Apache-2.0 许可证；数据和模型许可独立，见 [NOTICE](NOTICE)。
+更多提示词、工具、检索和评分的修改片段见[配置指南](docs/CONFIGURATION.md)。
 
-迁移中的图像路径、诊断判分、检查上下文等修正见 [变更记录](docs/CHANGES.md)，验证范围见 [验证记录](docs/VALIDATION.md)。
+## 数据与许可
+
+Benchmark 共 5,405 个病例，分布在 `with_img/ed_hosp`、`with_img/hosp_only`、`without_img/ed_hosp` 和 `without_img/hosp_only` 四个子集。推理所需的数据结构、访问要求和合成样例见[数据说明](data/README.md)。
+
+代码采用 [Apache-2.0](LICENSE)，归属说明见 [NOTICE](NOTICE)。数据和模型遵循各自的访问条件与许可。

@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 #!/usr/bin/env python3
 
 import logging
@@ -16,12 +16,12 @@ class RetrieveTool(Tool):
     """
     A tool for dense search using the local retrieval server.
 
-    This tool connects to a locally running dense retrieval server (launched via retrieval_launch.sh)
-    and performs dense retrieval using E5 embeddings on the indexed Wikipedia corpus.
+    This tool connects to a locally running dense retrieval server (launched via scripts/start_retrieval.sh)
+    and performs dense retrieval using E5 embeddings on the configured clinical corpus.
     """
 
     NAME = "retrieve"
-    DESCRIPTION = "Search for information using a dense retrieval server with Wikipedia corpus"
+    DESCRIPTION = "Search for information using a dense retrieval server with a clinical corpus"
 
     def __init__(
         self,
@@ -106,7 +106,7 @@ class RetrieveTool(Tool):
         score = result.get("score", 0.0)
         doc = result.get("document")
         if doc is not None:
-            # Nested format from examples/search/retrieval/server.py
+            # Nested format from services/retrieval_server.py
             content = _pick_first_nonempty(
                 doc.get("contents"),
                 doc.get("text"),

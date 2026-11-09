@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -122,48 +122,6 @@ class Trajectory:
         return True
 
 
-@dataclass
-class Episode:
-    id: str = ""  # rollout id e.g., task_id:rollout_idx
-    task: Any = None
-    termination_reason: "TerminationReason" = None  # noqa: F821
-    is_correct: bool = False
-    trajectories: list[Trajectory] = field(default_factory=list)
-    metrics: dict = field(default_factory=dict)
-    info: dict = field(default_factory=dict)
-
-    def to_dict(self):
-        # Remove large/non-serializable payloads (e.g., images) from task
-        def _sanitize_task(task_obj):
-            if isinstance(task_obj, dict):
-                cleaned = {k: v for k, v in task_obj.items() if k not in ("image", "images")}
-                return cleaned
-            return task_obj
-
-        return {
-            "id": self.id,
-            "task": _sanitize_task(self.task),
-            "termination_reason": self.termination_reason.value if self.termination_reason is not None else None,
-            "is_correct": bool(self.is_correct),
-            "trajectories": [trajectory.to_dict() for trajectory in self.trajectories],
-            "metrics": self.metrics,
-            "info": self.info,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "Episode":
-        """Create Episode from dictionary, properly deserializing Trajectory objects."""
-        from rllm.engine.agent_workflow_engine import TerminationReason
-
-        return cls(
-            id=data["id"],
-            task=data["task"],
-            termination_reason=TerminationReason(data["termination_reason"]) if data.get("termination_reason") is not None else TerminationReason.UNKNOWN,
-            is_correct=data["is_correct"],
-            trajectories=[Trajectory.from_dict(trajectory_data) for trajectory_data in data["trajectories"]],
-            metrics=data.get("metrics", {}),
-            info=data.get("info", {}),
-        )
 
 
 class BaseAgent(ABC):

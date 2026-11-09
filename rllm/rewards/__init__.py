@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 """Import reward-related classes and types from the reward module."""
 
 from .reward_fn import RewardFunction, zero_reward

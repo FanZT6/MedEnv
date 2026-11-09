@@ -1,7 +1,6 @@
 # Credentialed clinical data and third-party retrieval corpora
 /data/*
 !/data/README.md
-!/data/dataset_summary.json
 !/data/synthetic/
 /outputs/
 /models/
@@ -28,3 +27,28 @@ manifest.jsonl
 *.safetensors
 *.pt
 *.pth
+# Additional private artifacts if generated outside the usual data directories
+*.db
+*.db.*
+*.duckdb
+*.duckdb.*
+*.csv
+*.csv.gz
+*.parquet
+*.jsonl
+*.dcm
+*.jpg
+*.jpeg
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+ehr_*.json
+osce_*.json
+trajectory*.html
+knowledge.json
+*annotation*.json
+config.local.*
+# Explicit exceptions for the reviewed fictional software fixtures
+!/data/synthetic/**/synthetic_demo/ehr_synthetic_demo.json
+!/data/synthetic/**/synthetic_demo/osce_synthetic_demo.json

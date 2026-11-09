@@ -29,7 +29,8 @@ def build_parser():
     parser.add_argument("--temperature", type=float, default=0.6)
     parser.add_argument("--top_p", type=float, default=0.95)
     parser.add_argument("--max_prompt_length", type=int, default=4096)
-    parser.add_argument("--max_response_length", type=int, default=8192)
+    parser.add_argument("--max_response_length", type=int, default=8192,
+                        help="Trajectory token budget, including Doctor turns and environment replies")
     parser.add_argument("--parser_name", choices=("qwen", "r1"), default="qwen")
     parser.add_argument("--judge_model", default=os.getenv("JUDGE_MODEL", ""))
     parser.add_argument("--judge_base_url", default=os.getenv("JUDGE_BASE_URL", ""))
@@ -50,7 +51,7 @@ def run_configuration(args):
     if not no_cxr:
         names.append("cxr")
     names.append("request_exam")
-    if not no_cxr:
+    if not no_cxr and args.cxr_mode == "vision":
         names.append("cxr_grounding")
     if args.disable_retrieval:
         names.remove("retrieve")
@@ -75,11 +76,15 @@ def main(argv=None):
         if not case["gold_diagnosis"]:
             parser.error(f"Missing Final_Result in case {case['case_id']}")
         for study in case["ehr"].get("CXR", []):
+            if args.cxr_mode == "reports":
+                continue
             for dicom in study.get("dicoms", []):
                 path = dicom.get("jpg_path_abs")
                 if not path or not Path(path).is_file():
                     parser.error(f"Missing CXR image in case {case['case_id']}")
                 image_count += 1
+    if args.cxr_mode == "vision" and not no_cxr and not image_count:
+        parser.error("Vision mode requires image-backed cases; report-only data have no images")
     if args.dry_run:
         print(json.dumps({"subset": subdir, "cases": len(cases), "tasks": len(tasks),
                           "image_references": image_count, "tools": names, "cxr_mode": args.cxr_mode}, indent=2))
@@ -113,10 +118,16 @@ def main(argv=None):
     config = {**vars(args), "subdir": subdir, "tools": names, "case_count": len(cases), "task_count": len(tasks)}
     (output / "config.json").write_text(json.dumps(redact_secrets(config), indent=2))
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_path)
+    doctor_prompt = DOCTOR_SYSTEM_PROMPT_wo_IMG if no_cxr else DOCTOR_SYSTEM_PROMPT
+    if args.cxr_mode == "reports" and not no_cxr:
+        doctor_prompt = "\n".join(line for line in doctor_prompt.splitlines()
+                                  if not line.startswith("- cxr_grounding("))
+        doctor_prompt = doctor_prompt.replace("- cxr(): request a chest X-ray.",
+                                              "- cxr(): read the available chest X-ray report text (no images).")
     engine = AgentExecutionEngine(
         agent_class=MedicalAgent,
         agent_args={"tools": names, "parser_name": args.parser_name,
-                    "system_prompt": DOCTOR_SYSTEM_PROMPT_wo_IMG if no_cxr else DOCTOR_SYSTEM_PROMPT},
+                    "system_prompt": doctor_prompt},
         env_class=MedicalDialogueEnv,
         env_args={"tools": names, "reward_fn": med_diagnosis_reward, "max_steps": args.max_steps,
                   "timeout": args.env_timeout,

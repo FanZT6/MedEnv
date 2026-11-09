@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 import asyncio
 import base64
 import logging
@@ -8,11 +8,10 @@ from io import BytesIO
 import openai
 from PIL import Image
 
-from rllm.engine.rollout.rollout_engine import ModelOutput, RolloutEngine
+from rllm.engine.rollout.rollout_engine import ModelOutput, RolloutEngine, TerminationEvent, TerminationReason
 from rllm.globals import THOUGHT_DELIMITER_END, THOUGHT_DELIMITER_START
 from rllm.parser import ChatTemplateParser
 from rllm.tools.tool_base import Tool
-from rllm.workflows import TerminationEvent, TerminationReason
 
 
 class OpenAIEngine(RolloutEngine):

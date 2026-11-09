@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 import concurrent.futures
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager

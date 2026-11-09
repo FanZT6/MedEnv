@@ -18,7 +18,10 @@ dependencies = [
 [project.optional-dependencies]
 retrieval = ["datasets>=4.5,<5", "pyarrow>=21,<23", "faiss-cpu>=1.8,<2", "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "tqdm>=4.66,<5"]
 grounding = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "torchvision>=0.19,<1"]
-dev = ["build>=1.2,<2", "fastapi>=0.115,<1"]
+dev = ["fastapi>=0.115,<1"]
+
+[project.urls]
+Repository = "https://github.com/FanZT6/MedEnv"
 
 [project.scripts]
 medenv-bench = "medenv.cli:main"

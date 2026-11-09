@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 import json
 import logging
 import re
@@ -20,7 +20,8 @@ class ChatTemplateParser:
         self.generation_prompt = self._get_generation_prompt(tokenizer)
 
     def _get_generation_prompt(self, tokenizer):
-        messages = [{"role": "assistant", "content": ""}]
+        # Some chat templates require a user turn even when only probing the prefix.
+        messages = [{"role": "user", "content": "Hello."}]
 
         with_prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
         without_prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=False, tokenize=False)

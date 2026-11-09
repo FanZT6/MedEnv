@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 # ./rllm/rllm/tools/med_tool/dialog_tool.py
 from __future__ import annotations
 
@@ -344,7 +344,7 @@ def patient_answer(
         debug["answer_source"] = "EHR"
         return ans, debug
 
-    if knowledge_obj is None:
+    if not knowledge_obj:
         debug["answer_source"] = "NORMAL_NO_KB"
         return normal_in_that_aspect_answer(), debug
 

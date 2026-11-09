@@ -1,28 +1,65 @@
-# Running the benchmark
+# Running benchmark inference
 
-## 1. Evaluation environment
+[Home](../README.md) · [Configuration examples](CONFIGURATION.md) · [Data format](../data/README.md)
 
-Use Python 3.11. Install a PyTorch build matching the host, then `python -m pip install -e .`. Optional services use `python -m pip install -e '.[retrieval,grounding]'`. The evaluation client does not run the Doctor/Patient/Judge weights itself. The source environment's observed core package versions are in `requirements/benchmark-tested.txt`; these are constraints, not a complete dependency lock.
+## 1. Install the evaluation client
 
-vLLM should run in a separate environment. The source environment used vLLM 0.11.0; do not force its CUDA dependencies into a different evaluation environment. Model weights are external assets. Configure local model paths or model IDs in `.env`.
-
-## 2. Data
-
-Local data are under `data/bench` and `data/retrieval`. Public clones need an authorized local prepared benchmark, imported with `scripts/import_data.py`. Run `python scripts/validate_data.py --bench-root data/bench`. To recheck every copied byte, add `--checksums data/private/import-all.json` (or the manifest produced by a separate import).
-
-`--dry_run` loads cases and validates image references without loading a tokenizer, connecting to APIs, or requiring ML dependencies. It validates only the selected cases; use `--max_cases 0` and each subset for a complete run.
-
-## 3. Configure and launch services
-
-Copy `.env.example` to `.env` and edit it. Shell launchers load this file; direct Python commands do not. To export it in the current shell:
+Use Python 3.11. Run these commands from the repository root after installing the PyTorch build appropriate for your hardware:
 
 ```bash
-set -a
-source .env
-set +a
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[retrieval,grounding]'
+cp .env.example .env
 ```
 
-Start one service per terminal, in the appropriate environment:
+The client calls model servers through HTTP. Doctor, Patient and Judge weights run in a separate serving environment. For a client using existing retrieval and grounding endpoints, `python -m pip install -e .` is sufficient.
+
+## 2. Prepare the data
+
+Obtain the prepared benchmark through an authorized data channel and set its root in `.env`:
+
+```bash
+MEDENV_BENCH_ROOT=/path/to/bench
+```
+
+The expected directory structure and JSON fields are described in [data/README.md](../data/README.md). To validate a complete benchmark:
+
+```bash
+python scripts/validate_data.py --bench-root /path/to/bench
+```
+
+To check the pipeline using the included synthetic cases:
+
+```bash
+bash scripts/run_all.sh --case_dir data/synthetic --dry_run
+```
+
+A dry run checks the selected cases and image paths without contacting model services. Synthetic cases demonstrate the interface and are not evaluation data.
+
+## 3. Start the model services
+
+Create a separate vLLM environment:
+
+```bash
+python -m venv .venv-vllm
+source .venv-vllm/bin/activate
+python -m pip install vllm==0.11.0
+```
+
+Set these values in `.env`:
+
+```bash
+DOCTOR_MODEL_PATH=/path/to/doctor-model
+TOKENIZER_PATH=/path/to/doctor-model
+PATIENT_MODEL_PATH=/path/to/patient-model
+JUDGE_MODEL_PATH=/path/to/judge-model
+DOCTOR_GPUS=0
+PATIENT_GPUS=1
+JUDGE_GPUS=2
+```
+
+Launch one service per terminal, with the vLLM environment activated:
 
 ```bash
 bash scripts/start_vllm.sh doctor
@@ -30,86 +67,90 @@ bash scripts/start_vllm.sh patient
 bash scripts/start_vllm.sh judge
 ```
 
-Default names and ports:
+| Service | Model name exposed by the API | Default endpoint |
+|---|---|---|
+| Doctor | `doctor_agent` | `http://127.0.0.1:30000/v1` |
+| Patient / examiner | `patient_agent` | `http://127.0.0.1:30001/v1` |
+| Judge | `judge_agent` | `http://127.0.0.1:30002/v1` |
 
-| Role | Served model | Endpoint | Default GPU |
-|---|---|---|---|
-| Doctor | `doctor_agent` | `http://127.0.0.1:30000/v1` | 0 |
-| Patient | `patient_agent` | `http://127.0.0.1:30001/v1` | 1 |
-| Judge | `judge_agent` | `http://127.0.0.1:30002/v1` | 2 |
+The supplied model defaults use `Qwen/Qwen3-8B` for text inference. For image input, replace the Doctor with a vision-capable model and use its tokenizer. Set disjoint GPU groups; a comma-separated value such as `DOCTOR_GPUS=0,1` sets tensor parallelism to two. Adjust `MAX_MODEL_LEN` and `GPU_MEMORY_UTILIZATION` to fit your hardware.
 
-The reference README's TP=4/TP=4/single-GPU commands overlap on GPU 1. Set disjoint groups. For example, a 9-GPU machine can use `DOCTOR_GPUS=0,1,2,3`, `PATIENT_GPUS=4,5,6,7`, `JUDGE_GPUS=8`. The launcher derives TP from each list. Three single-GPU defaults are configuration examples, not a guarantee that all models/context lengths fit your hardware. `MAX_MODEL_LEN` and `GPU_MEMORY_UTILIZATION` are configurable. Extra vLLM arguments can be passed after the role.
+You can use existing compatible servers instead of launching these processes. Set the corresponding model names, base URLs and keys in `.env`. Report mode uses the Doctor's `/v1/completions` endpoint with a locally formatted prompt; vision mode uses `/v1/chat/completions`. Patient and Judge use Chat Completions. See [model configuration](CONFIGURATION.md#models-endpoints-and-gpus).
 
-Keep the port settings (`DOCTOR_PORT`, etc.) and client URLs consistent if changing ports. Extra retrieval/grounding GPUs must also be disjoint; those services default to CPU.
+## 4. Start retrieval and grounding
 
-### Retrieval
+Return to the evaluation environment (`source .venv/bin/activate`).
+
+**Retrieval:** prepare a corpus and matching E5/FAISS index as described in the [data guide](../data/README.md#retrieval-corpus), set `RETRIEVAL_INDEX` and `RETRIEVAL_CORPUS` in `.env`, then run:
 
 ```bash
-python -m pip install -e '.[retrieval]'
 bash scripts/start_retrieval.sh
 ```
 
-Uses the exact copied `corpus_passages.jsonl` and `e5_Flat.index`, E5 model `intfloat/e5-base-v2`, and port **8003**. The index and corpus row order must stay aligned. The default uses CPU FAISS. Setting `RETRIEVAL_GPUS` allows the embedding model to use CUDA; `--faiss_gpu` additionally requires a compatible GPU FAISS installation.
+The embedding model must match the one used to build the index; the default is `intfloat/e5-base-v2`. The service listens on port 8003. `RETRIEVAL_GPUS` is empty for CPU inference; set it to an unused GPU for CUDA embeddings. GPU FAISS is a separate optional server setting.
 
-To rebuild from an independently obtained authorized guidelines corpus:
-
-```bash
-python scripts/convert_guidelines.py --input data/retrieval/open_guidelines.jsonl --output data/retrieval/guidelines.jsonl
-python scripts/build_retrieval_index.py --input_jsonl data/retrieval/guidelines.jsonl --output_dir data/retrieval/guidelines_index --model_name intfloat/e5-base-v2
-```
-
-A rebuild with different corpus/model revisions is a different retrieval snapshot. Retain import hashes when reproducing the existing experiment.
-
-### Grounding DINO
-
-Install `.[grounding]`, obtain the `IDEA-Research/grounding-dino-base` model, and set `GROUNDING_MODEL_PATH` to its local directory. The service intentionally loads local files only.
+**Grounding:** place the `IDEA-Research/grounding-dino-base` model files at `GROUNDING_MODEL_PATH`. The server loads from that directory, then listens on port 30050:
 
 ```bash
 bash scripts/start_grounding.sh
 ```
 
-Default endpoint: `http://127.0.0.1:30050/ground`; health endpoint: `/health`. `GROUNDING_GPUS` defaults to empty (CPU). The grounding model is a generic detector inherited from the original workflow; clinical localization quality is not established by this package.
+`GROUNDING_GPUS` is empty for CPU inference. Grounding is used by `cxr_grounding` in image-containing cohorts. For no-CXR evaluation it is not needed; for image-containing cohorts, `--disable_grounding` explicitly removes that tool. Likewise, `--disable_retrieval` removes retrieval and changes the evaluation setting.
 
-### Health check
+Export the configuration and check service availability:
 
 ```bash
-set -a; source .env; set +a
+set -a
+source .env
+set +a
 python scripts/check_services.py
 ```
 
-Use `--no-grounding` for a no-CXR run and `--no-retrieval` only if retrieval is disabled. Judge is checked when `JUDGE_MODEL` is set. Empty `JUDGE_MODEL` selects the original containment-rule reward; using a Judge selects LLM scoring. Both are recorded by the reward metadata.
+Add `--no-grounding` and/or `--no-retrieval` to the health check when the corresponding tool is disabled. Judge is checked when `JUDGE_MODEL` is nonempty. Setting `JUDGE_MODEL=` selects string-containment scoring instead of LLM judging.
 
-## 4. Evaluation
+## 5. Run inference
+
+Shell launchers load `.env` automatically. Direct `python -m medenv` commands require exporting the variables first, as shown above.
 
 ```bash
-bash scripts/run_bench.sh --max_cases 10 --n_parallel_agents 1
+# CXR-report baseline: first 10 cases in with_img/ed_hosp.
+bash scripts/run_bench.sh --cxr_mode reports --max_cases 10 --n_parallel_agents 1
+
+# Multimodal Doctor: images plus report excerpts.
+bash scripts/run_bench.sh --cxr_mode vision --max_cases 10 --n_parallel_agents 1
+
+# No-CXR cohort; defaults to without_img/hosp_only.
 bash scripts/run_bench.sh --no_cxr --max_cases 10 --n_parallel_agents 1
+
+# Select a subset and repeat each case three times.
+bash scripts/run_bench.sh --subdir without_img/ed_hosp --max_cases 0 --repeat_k 3
+
+# Evaluate every case in every subset.
 bash scripts/run_all.sh --n_parallel_agents 1
 ```
 
-The compatibility command also works:
+`--max_cases 0` selects all cases. Positive values select a sorted prefix. `--max_steps` defaults to 15; `--n_parallel_agents` defaults to 8. Start with concurrency 1 when checking a service deployment, then increase it to suit capacity.
+
+CXR report mode returns report text. Vision mode supplies the images and a report excerpt of up to 200 characters, so it is not an image-only experiment. The server enforces the vision model's image-token limits. Keep the model, CXR mode, tools, Judge and inference budget fixed when comparing results.
+
+## 6. Inspect the results
+
+Each run creates `outputs/<run>/<subset>/`:
+
+| File | Contents |
+|---|---|
+| `config.json` | Model, selected tools, inference settings and case counts |
+| `metrics.json` | Aggregate metrics and per-case predictions, reference diagnoses and scores |
+| `trajectories/*.json` | Doctor actions, tool responses and terminal information |
+
+`accuracy_all_runs` counts correct runs over all runs; `accuracy_scored_runs` uses only runs with terminal scoring. `unscored_runs` reports missing terminal scores. With repeated runs, `empirical_pass_at_k` is the fraction of cases with at least one correct run. `mean_reward` is separate from accuracy and includes the configured process-reward term.
+
+Use `--output_dir outputs/my-run` for a single evaluation. Do not pass a shared `--output_dir` to `run_all.sh`, because later subsets would overwrite the earlier metrics and configuration.
+
+To view one trajectory:
 
 ```bash
-python examples/MedGym/run_med_with_tool.py --model doctor_agent --tokenizer_path /path/to/Qwen3-8B --base_url http://127.0.0.1:30000/v1 --case_dir data/bench --judge_model judge_agent --judge_base_url http://127.0.0.1:30002/v1
+python scripts/trajectory_to_html.py \
+  outputs/my-run/trajectories/<trajectory-file>.json \
+  --output outputs/my-run/trajectory.html
 ```
-
-`--subdir` selects any of the four subdirectories. `--max_cases <= 0` selects all, otherwise cases are sorted and truncated. `--repeat_k` repeats that selected cohort. The original loader consumes `ehr_*.json`; `osce_*.json` and the manifest are retained for provenance but are not Doctor inputs. Ground truth remains in environment task metadata for scoring and patient simulation; the initial Doctor message contains demographics and chief complaint.
-
-Tool sets preserve the original ordering:
-
-| Cohort | Tools |
-|---|---|
-| Without images | `ask_patient`, `diagnosis`, `retrieve`, `request_exam` |
-| With images | `ask_patient`, `diagnosis`, `retrieve`, `cxr`, `request_exam`, `cxr_grounding` |
-
-`--cxr_mode reports` is the Qwen3-8B text baseline. `--cxr_mode vision` sends image content through Chat Completions and requires a vision-capable Doctor. CXR tools expose report information in both modes: report mode includes the full `report_text`, while the multimodal agent sends the tool summary with a report excerpt (up to 200 characters) alongside images. This follows the original tool/agent formatting. Token budgets in vision mode count text; the model server enforces the actual image-token/context limit. The client does not estimate visual token usage.
-
-Optional `--disable_retrieval` / `--disable_grounding` change the tool set and are ablations. `--max_steps` defaults to 15 and applies to both environment and engine. `--env_timeout` defaults to 300 seconds per environment operation. Default API endpoints are local. Keep credentialed patient payloads within your authorized computing environment.
-
-## 5. Results
-
-Each run uses a unique directory under `outputs/`; `--output_dir` overrides it for a single run. Do not reuse one explicit output directory across `run_all.sh` subsets, since `metrics.json` and `config.json` would be overwritten.
-
-`metrics.json` reports actual terminal environment `is_correct` values. Unscored runs remain visible and count as failures in `accuracy_all_runs`. `accuracy_scored_runs` uses only scored runs. `empirical_pass_at_k` is the fraction of cases with at least one successful repeat, not the combinatorial unbiased estimator. `lenient_match_runs` is a separate string-matching diagnostic. Reward retains the original result-plus-process formula; process reward uses the original lexical overlap heuristic and is not a calibrated clinical confidence score.
-
-Trajectory/config serialization redacts API-key fields. Trajectories, metrics and HTML exports still contain patient-derived text and belong in the ignored output directory.

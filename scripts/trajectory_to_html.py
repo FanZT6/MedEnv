@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 #!/usr/bin/env python3
 """Convert an rLLM medical trajectory JSON into an offline HTML reader."""
 
@@ -89,7 +89,7 @@ def extract_final(step: dict[str, Any]) -> str:
         if function.get("name") not in {"finish", "diagnosis"}:
             continue
         args = parse_arguments(function.get("arguments"))
-        value = args.get("response") or args.get("result") or ""
+        value = args.get("final_response") or args.get("response") or args.get("result") or ""
         match = re.search(r"\\boxed\{([^}]+)\}", str(value))
         return match.group(1) if match else str(value)
     metadata = (step.get("info") or {}).get("metadata") or {}
@@ -104,7 +104,7 @@ def tool_title(name: str, args: dict[str, Any]) -> str:
     if name == "retrieve":
         return str(args.get("query") or "Retrieve knowledge")
     if name in {"diagnosis", "finish"}:
-        return str(args.get("result") or args.get("response") or "Submit diagnosis")
+        return str(args.get("final_response") or args.get("result") or args.get("response") or "Submit diagnosis")
     return str(args.get("content") or name)
 
 

@@ -1,0 +1,75 @@
+{
+  "package": "MedEnv diagnosis data processing",
+  "packaged_on": "2026-10-22",
+  "scope": "Recovered diagnosis preprocessing, report-only CXR; no clinical datasets or images",
+  "sources": [
+    {
+      "file": "osce_extractor.py",
+      "historical_file": "osce_extracter/osce_extracter_2_15.py",
+      "original_sha256": "1861320e1a38a6014a4074d7b3aa5af22b1674a1464efc722aee908aaf9b2d1e",
+      "changes": "Non-CXR clinical function bodies retained. Replaced image-dependent CXR branch by corrected report-index lookup. Explicit CXR failures; newest report-bearing 10 studies, chronological output; no image fields. Selection remains study-acquisition based, not report-completion based."
+    },
+    {
+      "file": "build_osce_dataset.py",
+      "historical_file": "osce_extracter/batch_build_osce_data.py",
+      "original_sha256": "cf0a786ca91d8af51da8e52c447af64e1363150929bda20b159b7cbd4542ebb0",
+      "changes": "Explicit clinical/report DBs; report-only JSON, no image copying. Compatible subset names now use nonempty report presence. Existing-output protection and surfaced failures. Candidate bug fix: HOSP-only requires no linked ED row; multi-ED admissions are excluded rather than passed to an extractor that rejects them. Existing unique-ED clinical eligibility and retained-candidate order are unchanged."
+    },
+    {
+      "file": "convert_osce_to_ehr.py",
+      "historical_file": "virtual_env/code/patient_agent/data_process_0212.py",
+      "original_sha256": "a5eb41e11c8eea8b4983d6fca1114b567cf8d0b8e5c46d5bfa35578f993bdf45",
+      "changes": "Retains report provenance and time fields; unknown report times remain null; no image references. Ordinary radiology note identifiers/times preserved."
+    },
+    {
+      "file": "sample_benchmark.py",
+      "historical_file": "virtual_env/code/patient_agent/bench_data_sample.py",
+      "original_sha256": "62b4fcd280907c3e3180c0b7c37adf538710c1e1851f4a543d03cd40e081f336",
+      "changes": "Historical ICD classifications and seeded selection retained. Copies only one OSCE/EHR JSON pair, not arbitrary case-folder files; rejects image-backed legacy JSON; no destructive moves."
+    },
+    {
+      "file": "import_hosp_note.py",
+      "historical_file": "oooold/import_hosp_note_to_duckdb.py",
+      "original_sha256": "7cb3522e8f9bdc9119fb36c446981a997890a89980390c47dbfaa807c7b663c0",
+      "changes": "Portable new-database-only adapter; optional ED import and streamed NOTE ZIP; preserves string ICD codes; no CXR/image indexing."
+    }
+  ],
+  "new_support_files": [
+    "initialize_cxr_index.py",
+    "cxr_reports.py",
+    "check_database.py",
+    "check_release.py",
+    "run_pipeline.sh",
+    "config.example.sh",
+    "requirements.txt",
+    ".gitignore",
+    "README.md",
+    "VALIDATION.md",
+    "tests/test_pipeline.py",
+    "tests/test_cxr_index.py",
+    "tests/test_report_runtime.py"
+  ],
+  "cxr_initializer": {
+    "implementation": "New prerequisite, not recovered historical SQL. Authorized metadata CSV plus study-keyed report JSON or native report TXT. Creates metadata_raw, metadata_ts2, reports, index_audit. Does not read images or create files_index/labels.",
+    "time_policy": "Correct numeric HHMMSS left padding and decimal fractions. Missing/invalid times fail. Study time is not report signing/completion time. Existing legacy image index refused.",
+    "references": [
+      "https://physionet.org/content/mimic-cxr-jpg/2.0.0/",
+      "https://mimic.mit.edu/docs/iv/modules/note/radiology.html"
+    ]
+  },
+  "not_bundled": [
+    "Earlier duplicate extractor versions and obsolete hardcoded launchers",
+    "Destructive legacy data_split.py (the batch builder already creates the four subsets)",
+    "One-off later Parquet dataset repacking code",
+    "Agent/training code already present in MedEnv",
+    "Knowledge corpus, CXR report corpus, source databases and actual benchmark manifests",
+    "Optional external-site ICD knowledge enrichment script; not required by the case-processing mainline",
+    "Image copying/refilling/counting helpers and image-derived labels; previous packaged version preserved outside the repository"
+  ],
+  "reproducibility": "Same clinical code is not proof of the same frozen benchmark. Exact input versions, prepared database, optional report/knowledge files, limits and selected-case manifest remain necessary.",
+  "runtime_compatibility": [
+    "medenv/cli.py: reports mode does not require images or advertise grounding; vision stays available",
+    "rllm/tools/med_tool/cxr_tool.py: returns report text without dicoms/images; report-specific schema",
+    "scripts/validate_data.py: explicit reports/vision validation mode"
+  ]
+}

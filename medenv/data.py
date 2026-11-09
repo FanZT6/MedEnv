@@ -1,5 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
-# prepare_med_data_bench.py
+# Modified for MedEnv; see NOTICE.
 # 适配 osce_data/bench 数据格式：按 ehr_<id>.json 读取，图像路径与 case 目录拼接
 from __future__ import annotations
 
@@ -123,7 +122,6 @@ def build_tasks(
                 "_repeat_id": rep,
             })
 
-    # print(f"###### tasks ######:\n{tasks[0]}")
     return tasks
 
 

@@ -8,7 +8,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from medenv.cli import build_parser, run_configuration
 from medenv.data import SUBSETS, prepare_med_data
@@ -20,9 +20,13 @@ from rllm.engine.agent_execution_engine import AgentExecutionEngine
 from rllm.engine.rollout.openai_engine import OpenAIEngine
 from rllm.engine.rollout.rollout_engine import ModelOutput
 from rllm.environments.medgym.medgym_env import MedicalDialogueEnv
+from rllm.parser import ChatTemplateParser
+from rllm.parser.tool_parser import QwenToolParser
 from rllm.rewards.med_diagnosis_reward import med_diagnosis_reward
 from rllm.tools.med_tool.cxr_tool import CXRTool
+from rllm.tools.med_tool.exam_result_tool import ExamResultTool
 from rllm.tools.tool_base import Tool, ToolOutput
+from scripts.validate_data import validate
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / 'data/synthetic'
@@ -68,8 +72,71 @@ class ScriptedEngine(AgentExecutionEngine):
         return ModelOutput(text=response)
 
 
+class BudgetAwareEngine(AgentExecutionEngine):
+    async def get_model_response(self, prompt, application_id, **kwargs):
+        last_message = prompt[-1]
+        if last_message['role'] == 'user' and 'submit your final diagnosis now' in last_message.get('content', ''):
+            return ModelOutput(text='<tool_call>' + json.dumps({'name': 'diagnosis', 'arguments': {'final_response': FINAL}}) + '</tool_call>')
+        return ModelOutput(text='<tool_call>{"name": "cxr", "arguments": {}}</tool_call>')
+
+
 class BenchmarkTests(unittest.TestCase):
+    def test_last_turn_requests_diagnosis_before_environment_closes(self):
+        tasks, _, _ = prepare_med_data(str(DATA))
+        with tempfile.TemporaryDirectory() as output, patch.dict(os.environ, {'MEDENV_TRAJECTORY_DIR': output, 'MEDENV_CXR_MODE': 'reports'}):
+            engine = BudgetAwareEngine(
+                tokenizer=TinyTokenizer(), agent_class=MedicalAgent,
+                agent_args={'tools': ['cxr', 'diagnosis']},
+                env_class=MedicalDialogueEnv,
+                env_args={'tools': ['cxr', 'diagnosis'], 'reward_fn': med_diagnosis_reward, 'max_steps': 2, 'timeout': 30},
+                n_parallel_agents=1, max_steps=2, max_prompt_length=20000, max_response_length=20000,
+                rollout_engine_args={'base_url': 'http://127.0.0.1:1/v1', 'api_key': 'None'},
+            )
+            try:
+                results = asyncio.run(engine.execute_tasks(tasks))
+                metrics = evaluate_doctor_results(results, tasks)
+                self.assertEqual(metrics['summary']['scored_runs'], 1)
+                self.assertEqual(metrics['summary']['correct_runs'], 1)
+                self.assertEqual(len(results[0].steps), 2)
+                self.assertEqual(results[0].steps[-1].action[0]['function']['name'], 'diagnosis')
+                self.assertIn('final_turn_instruction', results[0].steps[-1].info)
+            finally:
+                engine.shutdown()
+
+    def test_parameterless_tool_call_without_arguments(self):
+        response = '<tool_call>{"name": "cxr"}</tool_call>'
+        calls = QwenToolParser().parse(response)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0].name, 'cxr')
+        self.assertEqual(calls[0].arguments, {})
+        parser = ChatTemplateParser.get_parser(TinyTokenizer(), disable_thinking=True)
+        parsed = parser.parse_completion(TinyTokenizer().encode(response))
+        self.assertEqual(parsed['tool_calls'][0].arguments, {})
+
+    def test_exam_does_not_generate_from_empty_knowledge(self):
+        model = Mock()
+        model.chat.return_value = 'NONE'
+        tool = ExamResultTool()
+        with patch.object(tool, '_get_llm', return_value=model):
+            result = tool.forward(exam_type='blood tests', context={'ehr': {}, 'knowbase': []})
+        self.assertIsNone(result.error)
+        self.assertEqual(result.output['source'], 'none')
+        self.assertEqual(model.chat.call_count, 1)
+
+    def test_chat_template_requiring_a_user_turn(self):
+        class UserRequiredTokenizer(TinyTokenizer):
+            def apply_chat_template(self, messages, **kwargs):
+                if not any(message['role'] == 'user' for message in messages):
+                    raise ValueError('No user query found in messages')
+                return super().apply_chat_template(messages, **kwargs)
+
+        parser = ChatTemplateParser.get_parser(UserRequiredTokenizer())
+        self.assertIn('assistant', parser.generation_prompt)
+
     def test_all_subsets_and_repeats(self):
+        stats, errors = validate(DATA)
+        self.assertEqual(errors, [])
+        self.assertEqual(sum(item['cases'] for item in stats.values()), 4)
         for subset in SUBSETS:
             tasks, cases, _ = prepare_med_data(str(DATA), subdir=subset, repeat_k=3)
             self.assertEqual(len(cases), 1)
@@ -106,7 +173,7 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual(image['mime'], 'image/png')
         with patch.dict(os.environ, {'MEDENV_CXR_MODE': 'reports'}):
             report = tool.forward(context=tasks[0]['context'])
-        self.assertNotIn('image_base64', report.output['images'][0])
+        self.assertNotIn('images', report.output)
         self.assertIn('Synthetic', report.output['report_text'])
 
     def test_diagnosis_finalizes_and_scores_before_step_limit(self):

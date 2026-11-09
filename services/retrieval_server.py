@@ -1,4 +1,4 @@
-# Adapted for MedEnv (2026): portable benchmark-only packaging; see NOTICE and docs/CHANGES.md.
+# Modified for MedEnv; see NOTICE.
 #!/usr/bin/env python3
 """
 Dense retrieval server for Search training.
@@ -14,8 +14,8 @@ Environment setup:
     pip install uvicorn fastapi
 
 Usage:
-    python server.py --index_path ./search_data/prebuilt_indices/e5_Flat.index \
-                     --corpus_path ./search_data/wikipedia/wiki-18.jsonl \
+    python server.py --index_path data/retrieval/guidelines_index/e5_Flat.index \
+                     --corpus_path data/retrieval/guidelines_index/corpus_passages.jsonl \
                      --topk 10 --faiss_gpu
 """
 
@@ -187,60 +187,6 @@ class BaseRetriever:
         return self._batch_search(query_list, num, return_score)
 
 
-class BM25Retriever(BaseRetriever):
-    """BM25 sparse retriever using Pyserini."""
-
-    def __init__(self, config: Config):
-        super().__init__(config)
-        from pyserini.search.lucene import LuceneSearcher
-
-        self.searcher = LuceneSearcher(self.index_path)
-        self.contain_doc = self._check_contain_doc()
-        if not self.contain_doc:
-            self.corpus = load_corpus(self.corpus_path)
-        self.max_process_num = 8
-        logger.info(f"BM25Retriever initialized: index={self.index_path}")
-
-    def _check_contain_doc(self):
-        return self.searcher.doc(0).raw() is not None
-
-    def _search(self, query: str, num: int = None, return_score: bool = False):
-        if num is None:
-            num = self.topk
-        hits = self.searcher.search(query, num)
-        if len(hits) < 1:
-            if return_score:
-                return [], []
-            else:
-                return []
-        scores = [hit.score for hit in hits]
-        if len(hits) < num:
-            warnings.warn("Not enough documents retrieved!", stacklevel=2)
-        else:
-            hits = hits[:num]
-
-        if self.contain_doc:
-            all_contents = [json.loads(self.searcher.doc(hit.docid).raw())["contents"] for hit in hits]
-            results = [{"title": content.split("\n")[0].strip('"'), "text": "\n".join(content.split("\n")[1:]), "contents": content} for content in all_contents]
-        else:
-            results = load_docs(self.corpus, [hit.docid for hit in hits])
-
-        if return_score:
-            return results, scores
-        else:
-            return results
-
-    def _batch_search(self, query_list: list[str], num: int = None, return_score: bool = False):
-        results = []
-        scores = []
-        for query in query_list:
-            item_result, item_score = self._search(query, num, True)
-            results.append(item_result)
-            scores.append(item_score)
-        if return_score:
-            return results, scores
-        else:
-            return results
 
 
 class DenseRetriever(BaseRetriever):
@@ -328,10 +274,7 @@ class DenseRetriever(BaseRetriever):
 
 def get_retriever(config: Config):
     """Factory function to create appropriate retriever based on config."""
-    if config.retrieval_method == "bm25":
-        return BM25Retriever(config)
-    else:
-        return DenseRetriever(config)
+    return DenseRetriever(config)
 
 
 #####################################
@@ -426,11 +369,11 @@ def main():
     """Main entry point for the server."""
     global retriever, config
 
-    parser = argparse.ArgumentParser(description="Dense Retrieval Server (Search-R1 style)")
-    parser.add_argument("--index_path", type=str, default="./search_data/prebuilt_indices/e5_Flat.index", help="Path to FAISS index file")
-    parser.add_argument("--corpus_path", type=str, default="./search_data/wikipedia/wiki-18.jsonl", help="Path to corpus JSONL file")
+    parser = argparse.ArgumentParser(description="MedEnv clinical retrieval server")
+    parser.add_argument("--index_path", type=str, default="data/retrieval/guidelines_index/e5_Flat.index", help="Path to FAISS index file")
+    parser.add_argument("--corpus_path", type=str, default="data/retrieval/guidelines_index/corpus_passages.jsonl", help="Path to corpus JSONL file")
     parser.add_argument("--topk", type=int, default=10, help="Number of retrieved passages per query")
-    parser.add_argument("--retriever_name", type=str, default="e5", help="Name of the retriever model (e5, bge, bm25, etc.)")
+    parser.add_argument("--retriever_name", type=str, default="e5", help="Dense encoder family (e5, bge, etc.)")
     parser.add_argument("--retriever_model", type=str, default="intfloat/e5-base-v2", help="HuggingFace model path for the encoder")
     parser.add_argument("--faiss_gpu", action="store_true", help="Move FAISS index to GPU for faster search")
     parser.add_argument("--gpu_id", type=int, default=0, help="GPU ID to use for encoding")

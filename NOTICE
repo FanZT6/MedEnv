@@ -1,18 +1,8 @@
 MedEnv
 
-This distribution packages and adapts the MedGym OSCE evaluation workflow from
-a supplied local rLLM source tree (project metadata version 0.2.1).
-The supplied source LICENSE is Apache License 2.0 and is retained in full.
-No source Git history or upstream commit identifier was present.
+MedEnv includes code derived from rLLM and MedGym under the Apache License,
+Version 2.0. Modified files carry a MedEnv notice; original attribution
+notices are retained where present.
 
-Derived files under rllm/, medenv/data.py, services/, and selected scripts/
-carry adaptation notices. Source paths and SHA-256 fingerprints are recorded
-in docs/source_manifest.json. Packaging and runtime changes are documented
-in docs/CHANGES.md. Original notices, where present, are retained.
-
-The upstream pyproject metadata used an MIT identifier inconsistent with the
-supplied Apache-2.0 LICENSE. This distribution follows the supplied LICENSE.
-
-Patient data, retrieval corpora, indexes and model weights are not licensed
-by this code license. Their respective access and license terms apply.
-See docs/DATA.md for excluded assets and upstream sources.
+The code license does not cover datasets, retrieval corpora or model weights.
+Their respective licenses and access conditions apply.
