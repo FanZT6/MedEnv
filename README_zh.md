@@ -1,33 +1,78 @@
-# MedEnv: Scaling Multimodal Virtual Medical Environments for Long-Horizon Diagnosis
+<div align="center">
 
-**MICCAI 2026 接收论文。**
+# MedEnv
 
-MedEnv 是面向多轮诊断的多模态虚拟医疗环境。医生智能体通过问诊、申请检查、检索医学知识、查看胸片和视觉定位收集证据，最终提交诊断。本仓库提供数据处理框架、benchmark 推理与评测代码。
+### Scaling Multimodal Virtual Medical Environments for Long-Horizon Diagnosis
 
-[English](README.md) · [完整推理流程](docs/RUNNING.md) · [配置与代码修改示例](docs/CONFIGURATION.md) · [数据格式](data/README.md)
+**MICCAI 2026**
 
-## 公开范围与 MIMIC 数据限制
+[论文](https://papers.miccai.org/miccai-2026/paper/5084_paper.pdf) · [English](README.md) · [推理指南](docs/RUNNING.md) · [配置说明](docs/CONFIGURATION.md)
 
-我们公开的是**对 MIMIC 数据进行处理的代码框架和处理过程**，包括数据库导入、诊断时间窗口提取、OSCE 病例构建、EHR 格式转换和 ICD 分层抽样。具体步骤、输入要求和运行命令见 [`data_process/README.md`](data_process/README.md)。其中 CXR 预处理仅使用报告文本，不打包或复制图像，也不承诺重建与历史 5,405 例 benchmark 完全一致的数据集。
+**真实 EHR 支撑 · 多模态 · 交互式 · 可扩展**
 
-**MIMIC 是受限访问的数据集，本次代码公开不包含其原始数据或患者级衍生数据。** 原始表、临床记录、影像报告及图像、患者/住院/检查标识符、处理后的 OSCE/EHR 病例、病例抽样清单和逐例模型交互轨迹均应保存在私有环境，并遵守适用的 PhysioNet 访问条件及数据使用协议。去标识化、转成 JSON 或去掉本机路径，不代表这些记录可以公开。使用者须自行取得输入所需的 [MIMIC-IV](https://physionet.org/content/mimiciv/)、[MIMIC-IV-Note](https://physionet.org/content/mimic-iv-note/)、[MIMIC-IV-ED](https://physionet.org/content/mimic-iv-ed/) 和 [MIMIC-CXR](https://physionet.org/content/mimic-cxr/) 访问权限。Apache-2.0 仅适用于代码，不授予数据再分发权利。
+</div>
 
-真实输入、数据库和处理产物应存放在仓库之外。本地 `data/bench/`、`data/retrieval/` 和 `outputs/` 已被 Git 忽略，但 **`.gitignore` 不能阻止手工压缩、目录上传或文件复制带出这些内容**；发布时只应包含经过检查的源码。可公开的 `data/synthetic/` 是完全虚构的软件测试病例，其图片是生成的测试图案。
+## 目录
 
-关于删除：不再需要运行记录时可以删除 `outputs/`，评测会重新创建输出目录。建议保留 `data/README.md` 和 `data/synthetic/`，它们用于文档、快速检查和离线测试；单独迁移或移除私有的 `data/bench/` 与本地 `data/retrieval/`。删除后，真实评测需将 `MEDENV_BENCH_ROOT` 指向仓库外的授权数据，检索服务需配置外部 `RETRIEVAL_INDEX` / `RETRIEVAL_CORPUS`。检查范围及结果见[本地数据公开检查记录](docs/DATA_PRIVACY_AUDIT_zh.md)。
+- [概述](#概述)
+  - [环境与交互](#环境与交互)
+  - [智能体训练与结果](#智能体训练与结果)
+- [开始使用](#开始使用)
+  - [安装](#安装)
+  - [数据准备](#数据准备)
+  - [快速运行](#快速运行)
+- [仓库结构](#仓库结构)
+- [公开范围与 MIMIC 数据](#公开范围与-mimic-数据)
+- [引用](#引用)
+- [许可](#许可)
 
-## 推理流程
+## 概述
 
-1. 加载病例，向医生提供人口学信息和主诉。
-2. 医生选择问诊或工具调用，环境返回相应证据。患者与检查模拟器优先使用病例 EHR，记录不足时查询关联的疾病知识。
-3. 重复交互，直到医生提交诊断或达到轮数限制。
-4. Judge 根据参考诊断评分，保存指标和完整交互轨迹。
+**MedEnv** 将真实临床记录转化为面向长程诊断的交互式环境。医生智能体通过主动问诊、申请检查、检索指南和查看胸片逐步获取证据，最终给出诊断。患者与检查模拟器结合患者自身的 EHR 证据和疾病级知识，支持一致的多轮交互。论文进一步利用该环境训练诊断智能体 **Diagnosis-R1**，通过基于置信度的过程监督学习有价值的证据获取策略。
 
-可用工具包括 `ask_patient`、`request_exam`、`retrieve`、`diagnosis`；有图子集还提供 `cxr` 和 `cxr_grounding`。
+### 环境与交互
 
-## 快速开始
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/a53a72ce-aa5f-4a99-ab8c-03c7614bd01b" width="680" alt="MedEnv 环境：医生智能体连接患者模拟器、检查模拟器、指南检索与视觉工具。">
+</p>
 
-推荐 Python 3.11，PyTorch 按硬件环境安装。
+| 组件 | 作用 |
+|---|---|
+| 患者模拟器 | 回答病史、症状和个人感受相关问题。 |
+| 检查模拟器 | 返回体格检查、实验室检查和影像证据。 |
+| 检索与视觉工具 | 支持指南检索、胸片查看和视觉定位。 |
+| 证据路由 | 优先查询病例 EHR，再查询疾病知识；两者均无法回答时使用兜底回复。 |
+
+![数据构建与多模拟器交互](https://github.com/user-attachments/assets/042c5728-1ccf-4ddd-b2b8-5daff3e4beca)
+
+*从 EHR 构建角色专属证据，并通过工具调用开展多轮交互。所提供图示包含早期统计；海报报告的规模为 **496K+ 条轨迹**和**约 4.9K 条疾病级知识条目**。*
+
+- **数据来源：** MIMIC-IV、MIMIC-IV-Note，以及可配对的 MIMIC-CXR 检查。
+- **病例构建：** 整理诊断阶段证据，移除早期记录中的明确诊断表述，保留诊断标签用于评测。
+- **评测指标：** 最终诊断准确率、有效交互轮次和平均交互长度；交互轨迹可用于分析重复提问、过早结束诊断等问题。
+
+### 智能体训练与结果
+
+论文使用约 3K 条专家轨迹对 Qwen3-VL-8B-Instruct 进行冷启动训练，再通过 GRPO 结合结果奖励与密集过程奖励；过程奖励依据模型对参考诊断的置信度增益计算。每例进行八次随机采样，过滤全部正确或全部错误的病例。
+
+**海报报告的诊断准确率（%）：**
+
+| 模型 | 无图像 | 有图像 |
+|---|---:|---:|
+| Qwen3-VL-8B | 10.28 | 12.16 |
+| MedGemma-27B | 27.75 | 28.95 |
+| Gemini-3-Flash | 34.15 | 33.97 |
+| GPT 5 | 34.84 | 35.86 |
+| Qwen3.5-397B-A17B | 35.99 | 37.56 |
+| **Diagnosis-R1** | **41.95** | **41.15** |
+
+**训练消融：** 基础模型 → SFT → 仅结果奖励的 RL → Diagnosis-R1，无图像准确率依次为 **10.28 → 27.54 → 31.51 → 41.95%**。扩展训练轨迹的收益在约 50K 条附近逐渐饱和；图像输入并未在所有模型上带来一致提升。
+
+## 开始使用
+
+### 安装
+
+推荐 **Python 3.11**，并根据硬件安装合适的 PyTorch 版本。
 
 ```bash
 git clone https://github.com/FanZT6/MedEnv.git
@@ -36,68 +81,97 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e .
 cp .env.example .env
+```
 
-# 用合成病例检查全部四个子集，无需启动模型服务。
+本地运行检索和 Grounding 服务时，使用 `python -m pip install -e '.[retrieval,grounding]'` 安装可选依赖。模型服务使用[独立的 vLLM 环境](docs/RUNNING.md#3-start-the-model-services)。
+
+### 数据准备
+
+1. 获取所需 MIMIC 访问授权，按照[数据处理流程](data_process/README.md)准备病例。
+2. 在 `.env` 中设置 `MEDENV_BENCH_ROOT=/path/to/bench`。
+3. 对照[输入格式](data/README.md#input-structure)，验证病例：
+
+```bash
+python scripts/validate_data.py --bench-root /path/to/bench
+```
+
+历史评测 benchmark 共 **5,405 个病例**：
+
+| 子集 | 病例数 |
+|---|---:|
+| `with_img/ed_hosp` | 401 |
+| `with_img/hosp_only` | 17 |
+| `without_img/ed_hosp` | 1,517 |
+| `without_img/hosp_only` | 3,470 |
+
+仓库提供 **4 个虚构病例**用于接口检查，不包含真实 benchmark 数据；公开的 CXR 处理流程仅处理报告文本，不能精确重建历史含图像 benchmark。
+
+### 快速运行
+
+**无需模型服务，检查数据流程：**
+
+```bash
 bash scripts/run_all.sh --case_dir data/synthetic --dry_run
 ```
 
-在 `.env` 中设置数据路径、模型路径、tokenizer、API 地址和 GPU：
+**运行评测：** 在 `.env` 中配置模型路径、tokenizer 和 API 地址，再按照[模型服务配置](docs/RUNNING.md#3-start-the-model-services)和[检索 / Grounding 配置](docs/RUNNING.md#4-start-retrieval-and-grounding)启动服务。
 
 ```bash
-MEDENV_BENCH_ROOT=/path/to/bench
-DOCTOR_MODEL_PATH=/path/to/doctor-model
-TOKENIZER_PATH=/path/to/doctor-model
-PATIENT_MODEL_PATH=/path/to/patient-model
-JUDGE_MODEL_PATH=/path/to/judge-model
-DOCTOR_GPUS=0
-PATIENT_GPUS=1
-JUDGE_GPUS=2
-```
-
-按[运行指南](docs/RUNNING.md)安装并分别启动 Doctor、Patient、Judge、检索和 Grounding 服务后，即可推理：
-
-```bash
-# 有 CXR 子集：文本模型通过报告获取胸片信息。
+# 胸片报告基线：with_img/ed_hosp 中的 10 个病例。
 bash scripts/run_bench.sh --cxr_mode reports --max_cases 10 --n_parallel_agents 1
 
-# 无 CXR 子集。
+# 无胸片子集：without_img/hosp_only。
 bash scripts/run_bench.sh --no_cxr --max_cases 10 --n_parallel_agents 1
 
-# 指定子集，运行全部病例，每例重复 3 次。
-bash scripts/run_bench.sh --subdir with_img/hosp_only --max_cases 0 --repeat_k 3
-
-# 运行全部四个子集。
+# 运行全部四个子集的所有病例。
 bash scripts/run_all.sh --n_parallel_agents 1
 ```
 
-使用图像输入时，将 Doctor 换成支持视觉的模型及其 tokenizer，并设置 `--cxr_mode vision`。两种 CXR 模式均会提供报告信息，视觉模式额外传入图像。
-
-默认结果路径为 `outputs/<run>/<subset>/`，包含运行配置 `config.json`、评测指标 `metrics.json` 和 `trajectories/` 下的逐例轨迹。
-
-## 修改设置
-
-| 要修改什么 | 修改位置 |
+| 设置 | 用法 |
 |---|---|
-| 模型、API 地址、GPU、数据路径 | [`.env.example`](.env.example)：复制为 `.env` 后编辑 |
-| 样本数、轮数、重复次数、采样温度、并发数 | 命令行参数；默认值在 [`medenv/cli.py`](medenv/cli.py) 的 `build_parser()` |
-| 医生提示词 | [`rllm/agents/system_prompts.py`](rllm/agents/system_prompts.py) |
-| 患者回答与检查结果的生成规则 | [`dialog_tool.py`](rllm/tools/med_tool/dialog_tool.py)、[`exam_result_tool.py`](rllm/tools/med_tool/exam_result_tool.py) |
-| 启用的工具 | [`medenv/cli.py`](medenv/cli.py) 的 `run_configuration()` |
-| Judge 提示词、评分逻辑 | [`med_diagnosis_reward.py`](rllm/rewards/med_diagnosis_reward.py) |
-| 数据字段与医生的初始主诉 | [`medenv/data.py`](medenv/data.py) |
+| 多模态推理 | 使用支持视觉的 Doctor 及匹配的 tokenizer，设置 `--cxr_mode vision`。两种 CXR 模式均提供报告信息，视觉模式额外提供图像。 |
+| 样本预算 | `--max_cases 0` 选择整个子集；`--repeat_k` 控制重复运行次数。 |
+| 结果保存 | `outputs/<run>/<subset>/`：`config.json`、`metrics.json` 和 `trajectories/`。 |
+| 自定义配置 | [模型、提示词、工具与评分](docs/CONFIGURATION.md) |
 
-例如，调整推理预算和采样参数：
+## 仓库结构
 
-```bash
-bash scripts/run_bench.sh \
-  --max_cases 100 --repeat_k 3 --max_steps 20 \
-  --temperature 0.2 --top_p 0.9 --n_parallel_agents 4
+```text
+medenv/        Benchmark 命令行、病例加载与指标计算
+rllm/          医生智能体、环境、工具与评分
+services/      检索与视觉定位服务
+scripts/       服务启动、评测与结果可视化
+data_process/  MIMIC 数据处理代码与文档
+data/          输入格式与虚构测试病例
+docs/          推理指南、配置说明与图示
+tests/         离线测试
 ```
 
-更多提示词、工具、检索和评分的修改片段见[配置指南](docs/CONFIGURATION.md)。
+## 公开范围与 MIMIC 数据
 
-## 数据与许可
+| 公开内容 | 不作为 benchmark 数据分发的内容 |
+|---|---|
+| 处理代码：数据库导入、诊断窗口提取、OSCE 构建、EHR 转换与 ICD 分层抽样 | MIMIC 原始表、临床记录、报告与图像 |
+| 推理 / 评测代码和虚构软件测试样例 | 患者 / 住院 / 检查标识符、处理后的病例、抽样清单和逐例交互轨迹 |
 
-Benchmark 共 5,405 个病例，分布在 `with_img/ed_hosp`、`with_img/hosp_only`、`without_img/ed_hosp` 和 `without_img/hosp_only` 四个子集。推理所需的数据结构、访问要求和合成样例见[数据说明](data/README.md)。
+- **访问授权：** 按输入需要自行取得 [MIMIC-IV](https://physionet.org/content/mimiciv/)、[MIMIC-IV-Note](https://physionet.org/content/mimic-iv-note/)、[MIMIC-IV-ED](https://physionet.org/content/mimic-iv-ed/) 和 [MIMIC-CXR](https://physionet.org/content/mimic-cxr/) 的授权；使用 JPG 图像时还需遵守 [MIMIC-CXR-JPG](https://physionet.org/content/mimic-cxr-jpg/) 的相应要求。
+- **数据使用：** MIMIC 衍生记录和轨迹仍受适用访问条件与数据使用协议约束。去标识化或转换成 JSON 不授予再分发权利；Apache-2.0 仅适用于代码。
+- **本地文件：** 真实输入、数据库与处理产物应保存在仓库外。Git 忽略本地 benchmark、检索资产和输出目录，但**不会**过滤手工压缩或上传。保留 `data/README.md` 和 `data/synthetic/`；不再需要运行记录时可删除 `outputs/`。
+- **详细说明：** [数据处理流程](data_process/README.md) · [数据指南](data/README.md) · [发布检查记录](docs/DATA_PRIVACY_AUDIT_zh.md)。
 
-代码采用 [Apache-2.0](LICENSE)，归属说明见 [NOTICE](NOTICE)。数据和模型遵循各自的访问条件与许可。
+## 引用
+
+```bibtex
+@inproceedings{FanZhi_MedEnv_MICCAI2026,
+  title     = {MedEnv: Scaling Multimodal Virtual Medical Environments for Long-Horizon Diagnosis},
+  author    = {Fan, Zhiting and Ren, Xuxiang and Wang, Yuan and Chen, Ruizhe and
+               Meng, Zijie and Hu, Keli and Liu, Jiaxiang and Wu, Jian and
+               Zhai, Weiqi and Xu, Hongxia and Liu, Zuozhu},
+  booktitle = {Medical Image Computing and Computer Assisted Intervention -- MICCAI 2026},
+  year      = {2026}
+}
+```
+
+## 许可
+
+代码采用 [Apache-2.0](LICENSE)，归属说明见 [NOTICE](NOTICE)。数据集与模型权重遵循各自的访问条件和许可。
